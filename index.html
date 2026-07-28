@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resenha Client</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <div class="logo">RESENHA<span>CLIENT</span></div>
+        <div class="status-dot" id="statusDot" title="Desconectado"></div>
+      </header>
+
+      <!-- Tela de login (primeira execução) -->
+      <section id="loginView" class="view hidden">
+        <p class="hint">
+          Entre no site com a Steam, gere um <strong>código de conexão</strong> no seu
+          perfil e digite aqui. Você só precisa fazer isso uma vez.
+        </p>
+        <form id="loginForm">
+          <label>Código de conexão
+            <input type="text" id="pairCode" required autocomplete="off" spellcheck="false"
+                   placeholder="EX: 7K2M9Q" maxlength="12" class="code-input" />
+          </label>
+          <div id="loginError" class="error hidden"></div>
+          <button type="submit" id="loginBtn">Conectar</button>
+        </form>
+        <details class="advanced">
+          <summary>Avançado</summary>
+          <label>Servidor (backend)
+            <input type="url" id="backendUrl" placeholder="https://api.resenha.gg" />
+          </label>
+          <button type="button" id="saveBackendBtn" class="secondary">Salvar servidor</button>
+        </details>
+      </section>
+
+      <!-- Tela de status (uso normal) -->
+      <section id="statusView" class="view hidden">
+        <div class="card">
+          <div class="row">
+            <span class="label">Conexão</span>
+            <span id="connLabel" class="value">—</span>
+          </div>
+          <div class="row">
+            <span class="label">Partida</span>
+            <span id="matchLabel" class="value">nenhuma partida ativa</span>
+          </div>
+          <div class="row">
+            <span class="label">GSI (CS2)</span>
+            <span id="gsiLabel" class="value">—</span>
+          </div>
+        </div>
+
+        <label class="toggle">
+          <input type="checkbox" id="autostart" />
+          <span>Executar ao iniciar o Windows</span>
+        </label>
+
+        <p class="hint small">
+          O Resenha Client fica na bandeja do sistema e só processa eventos do CS2
+          quando existe uma partida criada pelo site. Partidas Premier, Competitivo,
+          Casual ou Deathmatch são ignoradas.
+        </p>
+
+        <div class="actions">
+          <button type="button" id="logsBtn" class="secondary">Abrir logs</button>
+          <button type="button" id="logoutBtn" class="danger">Sair da conta</button>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span id="versionLabel"></span>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+# dependências e builds
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# instaladores gerados localmente
+*.exe
+*.msi
+
+# segredos (o app guarda config e tokens em %APPDATA%, mas por segurança)
+.env
+.env.*
+!.env.example
+
+# editor / sistema
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+*.log

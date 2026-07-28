@@ -1,0 +1,50 @@
+[package]
+name = "resenha-client"
+version = "0.1.0"
+description = "Resenha Client — integra o CS2 (GSI) com a plataforma Resenha"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+futures-util = "0.3"
+
+# WebSocket (cliente → backend dedicado)
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+
+# Servidor HTTP local (recebe os POST do GSI em 127.0.0.1:3210)
+axum = "0.7"
+
+# Chamadas REST (login / refresh)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Tokens no Windows Credential Manager
+keyring = { version = "3", features = ["windows-native"] }
+
+# Logs em arquivo
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+rand = "0.8"
+dirs = "5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
+[profile.release]
+# Binário pequeno e leve — prioridade do projeto
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capacidade padrão da janela principal",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
