@@ -1,22 +1,26 @@
-#define AppName "Resenha Client"
-#define AppVersion "0.1.0"
+#define AppName "KAIRO"
+#define AppVersion "0.2.1"
 
 
 [Setup]
 
-AppId={{RESENHA-CLIENT}}
+AppId={{KAIRO-CLIENT}}
 
 AppName={#AppName}
 
 AppVersion={#AppVersion}
 
-DefaultDirName={autopf}\Resenha Client
+AppPublisher="KAIRO"
 
-DefaultGroupName=Resenha Client
+SetupIconFile=assets\icon.ico
+
+DefaultDirName={autopf}\KAIRO
+
+DefaultGroupName=KAIRO
 
 OutputDir=Output
 
-OutputBaseFilename=Resenha-Setup
+OutputBaseFilename=KAIRO-Setup
 
 Compression=lzma
 
@@ -32,11 +36,13 @@ Source: "Build\resenha-client.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 
-Name: "{group}\Resenha Client"; Filename: "{app}\resenha-client.exe"
+Name: "{group}\KAIRO"; Filename: "{app}\resenha-client.exe"
 
-Name: "{autodesktop}\Resenha Client"; Filename: "{app}\resenha-client.exe"
+Name: "{autodesktop}\KAIRO"; Filename: "{app}\resenha-client.exe"
 
 
 [Run]
 
-Filename: "{app}\resenha-client.exe"; Description: "Abrir Resenha Client"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\resenha-client.exe"; \
+Description: "Abrir KAIRO"; \
+Flags: nowait postinstall skipifsilent
