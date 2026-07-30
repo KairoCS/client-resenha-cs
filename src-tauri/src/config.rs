@@ -8,11 +8,33 @@ use std::path::PathBuf;
 
 pub const DEFAULT_GSI_PORT: u16 = 3210;
 
+/// Endereço do backend. Fixo no binário e fora do config.json, da UI e do
+/// payload de status — nada de anunciar a infraestrutura por aí. Em dev,
+/// aponte pra outro lugar na hora de compilar:
+///   RESENHA_BACKEND_URL=http://localhost:4000 cargo build
+pub fn backend_url() -> String {
+    option_env!("RESENHA_BACKEND_URL")
+        .unwrap_or("https://backend-cs-resenha.onrender.com")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// URL do WebSocket derivada da base: https → wss, http → ws.
+pub fn ws_url() -> String {
+    let base = backend_url();
+    let ws_base = if let Some(rest) = base.strip_prefix("https://") {
+        format!("wss://{rest}")
+    } else if let Some(rest) = base.strip_prefix("http://") {
+        format!("ws://{rest}")
+    } else {
+        format!("ws://{base}")
+    };
+    format!("{ws_base}/ws/client")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
-    /// URL base do backend dedicado (REST + WebSocket).
-    pub backend_url: String,
     /// Porta do servidor HTTP local que recebe o GSI.
     pub gsi_port: u16,
     /// Token secreto compartilhado com o CS2 via gamestate_integration_resenha.cfg.
@@ -23,26 +45,9 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            backend_url: "http://localhost:4000".into(),
             gsi_port: DEFAULT_GSI_PORT,
             gsi_token: String::new(),
         }
-    }
-}
-
-impl AppConfig {
-    /// Deriva a URL do WebSocket a partir da URL base do backend.
-    /// http://x → ws://x/ws/client | https://x → wss://x/ws/client
-    pub fn ws_url(&self) -> String {
-        let base = self.backend_url.trim_end_matches('/');
-        let ws_base = if let Some(rest) = base.strip_prefix("https://") {
-            format!("wss://{rest}")
-        } else if let Some(rest) = base.strip_prefix("http://") {
-            format!("ws://{rest}")
-        } else {
-            format!("ws://{base}")
-        };
-        format!("{ws_base}/ws/client")
     }
 }
 
@@ -83,4 +88,28 @@ fn random_token() -> String {
     let mut bytes = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut bytes);
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_antigo_com_backend_url_continua_carregando() {
+        // Versões até a 0.2.0 gravavam backend_url aqui. O campo saiu, mas o
+        // arquivo de quem já usa o app PRECISA continuar parseando: se falhar,
+        // o load() cai no default, regera o gsi_token e reescreve o .cfg do
+        // CS2 — que só passa a valer depois de reiniciar o jogo.
+        let antigo = r#"{"backend_url":"http://sei-la:4000","gsi_port":3210,"gsi_token":"abc123"}"#;
+        let cfg: AppConfig = serde_json::from_str(antigo).expect("config antigo deve carregar");
+        assert_eq!(cfg.gsi_token, "abc123");
+        assert_eq!(cfg.gsi_port, DEFAULT_GSI_PORT);
+    }
+
+    #[test]
+    fn ws_url_deriva_o_esquema_da_base() {
+        let url = ws_url();
+        assert!(url.ends_with("/ws/client"), "url: {url}");
+        assert!(url.starts_with("wss://") || url.starts_with("ws://"), "url: {url}");
+    }
 }

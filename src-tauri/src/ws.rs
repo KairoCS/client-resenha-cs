@@ -24,6 +24,7 @@ pub fn spawn(
     app: AppHandle,
     mut out_rx: mpsc::UnboundedReceiver<Value>,
     mut session_rx: watch::Receiver<bool>,
+    mut update_rx: watch::Receiver<bool>,
 ) {
     tauri::async_runtime::spawn(async move {
         let mut backoff: u64 = 1;
@@ -37,7 +38,20 @@ pub fn spawn(
                 continue;
             }
 
-            let result = connect_and_run(&app, &mut out_rx, &mut session_rx, &mut backoff).await;
+            // Atualização obrigatória pendente: não adianta reconectar, o
+            // backend recusa no HELLO. Espera a flag mudar (o usuário
+            // atualiza e reinicia, ou o backend volta atrás na exigência).
+            if *update_rx.borrow() {
+                if update_rx.changed().await.is_err() {
+                    return;
+                }
+                backoff = 1;
+                continue;
+            }
+
+            let result =
+                connect_and_run(&app, &mut out_rx, &mut session_rx, &mut update_rx, &mut backoff)
+                    .await;
 
             {
                 let state = app.state::<AppState>();
@@ -64,21 +78,17 @@ async fn connect_and_run(
     app: &AppHandle,
     out_rx: &mut mpsc::UnboundedReceiver<Value>,
     session_rx: &mut watch::Receiver<bool>,
+    update_rx: &mut watch::Receiver<bool>,
     backoff: &mut u64,
 ) -> Result<(), String> {
-    let (backend_url, ws_url, tokens) = {
-        let state = app.state::<AppState>();
-        let (backend_url, ws_url) = {
-            let cfg = state.config.lock().unwrap();
-            (cfg.backend_url.clone(), cfg.ws_url())
-        };
-        let tokens = state
-            .tokens
-            .load()
-            .await
-            .ok_or_else(|| "sem tokens salvos".to_string())?;
-        (backend_url, ws_url, tokens)
-    };
+    let backend_url = crate::config::backend_url();
+    let ws_url = crate::config::ws_url();
+    let tokens = app
+        .state::<AppState>()
+        .tokens
+        .load()
+        .await
+        .ok_or_else(|| "sem tokens salvos".to_string())?;
 
     // 1ª tentativa com o access token atual; se o handshake responder 401,
     // renova com o refresh token e tenta mais uma vez.
@@ -164,6 +174,13 @@ async fn connect_and_run(
                     return Ok(());
                 }
             }
+            _ = update_rx.changed() => {
+                if *update_rx.borrow() {
+                    // Virou obrigatória a atualização: sai de cena.
+                    let _ = sink.send(Message::Close(None)).await;
+                    return Ok(());
+                }
+            }
         }
     }
 }
@@ -218,6 +235,18 @@ fn handle_server_message(app: &AppHandle, txt: &str) {
             info!("END_MATCH recebido — partida {ended:?} encerrada, voltando à espera");
             send_ws(app, json!({ "type": "MATCH_ENDED_ACK" }));
             emit_status(app);
+        }
+        Some("UPDATE_REQUIRED") => {
+            // Portão do backend: esta versão não opera mais. Bloqueia tudo e
+            // manda a UI pra tela de atualização.
+            let latest = msg
+                .get("latest")
+                .and_then(Value::as_str)
+                .unwrap_or("mais recente")
+                .to_string();
+            let url = msg.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+            warn!("backend exige atualização (v{} disponível) — coleta bloqueada", latest);
+            crate::update::definir(app, Some(crate::state::UpdateInfo { latest, url }));
         }
         Some("PING") => send_ws(app, json!({ "type": "PONG" })),
         other => info!("mensagem WS não tratada: {other:?}"),

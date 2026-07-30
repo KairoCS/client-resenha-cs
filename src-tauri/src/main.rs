@@ -8,6 +8,7 @@ mod events;
 mod gsi;
 mod state;
 mod tray;
+mod update;
 mod ws;
 
 use state::{emit_status, AppState};
@@ -30,12 +31,7 @@ async fn login(app: AppHandle, code: String) -> Result<(), String> {
     if code.is_empty() {
         return Err("digite o código de conexão gerado no site".into());
     }
-    let backend_url = {
-        let state = app.state::<AppState>();
-        let url = state.config.lock().unwrap().backend_url.clone();
-        url
-    };
-    let tokens = auth::pair(&backend_url, &code)
+    let tokens = auth::pair(&config::backend_url(), &code)
         .await
         .map_err(|e| e.to_string())?;
     let state = app.state::<AppState>();
@@ -76,33 +72,6 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_backend_url(app: AppHandle, url: String) -> Result<(), String> {
-    let url = url.trim().trim_end_matches('/').to_string();
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        return Err("URL inválida: use http:// ou https://".into());
-    }
-    {
-        let state = app.state::<AppState>();
-        let mut cfg = state.config.lock().unwrap();
-        cfg.backend_url = url;
-        config::save(&cfg).map_err(|e| format!("falha ao salvar config: {e}"))?;
-    }
-    // Se estiver conectado, derruba e reconecta já na URL nova. O intervalo
-    // garante que o watch não coalesça o false→true num único aviso.
-    if app.state::<AppState>().tokens.is_logged_in() {
-        let handle = app.clone();
-        tauri::async_runtime::spawn(async move {
-            let state = handle.state::<AppState>();
-            let _ = state.session_tx.send(false);
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-            let _ = state.session_tx.send(true);
-        });
-    }
-    emit_status(&app);
-    Ok(())
-}
-
-#[tauri::command]
 fn open_logs() {
     let dir = config::log_dir();
     let _ = std::fs::create_dir_all(&dir);
@@ -110,6 +79,35 @@ fn open_logs() {
     {
         let _ = std::process::Command::new("explorer").arg(&dir).spawn();
     }
+}
+
+/// Abre o instalador da versão nova no navegador padrão.
+#[tauri::command]
+fn baixar_atualizacao(app: AppHandle) -> Result<(), String> {
+    let url = {
+        let state = app.state::<AppState>();
+        let info = state.update_required.lock().unwrap();
+        info.as_ref().map(|u| u.url.clone()).unwrap_or_default()
+    };
+    // Só http(s): o valor vem do backend, mas nunca passamos string arbitrária
+    // pro shell do sistema.
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("o servidor não informou um link de download válido".into());
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("não consegui abrir o navegador: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Reconsulta o backend na hora (botão "já atualizei / verificar de novo").
+#[tauri::command]
+async fn verificar_atualizacao(app: AppHandle) {
+    update::verificar(&app).await;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,10 +134,13 @@ fn main() {
 
     let (ws_tx, ws_rx) = mpsc::unbounded_channel();
     let (session_tx, session_rx) = watch::channel(false);
+    let (update_tx, update_rx) = watch::channel(false);
 
     let app_state = AppState {
         config: Mutex::new(app_config),
         tokens: auth::TokenManager::new(),
+        update_required: Mutex::new(None),
+        update_tx,
         active_match: Mutex::new(None),
         ws_connected: std::sync::atomic::AtomicBool::new(false),
         ws_tx,
@@ -165,8 +166,9 @@ fn main() {
             logout,
             get_status,
             set_autostart,
-            set_backend_url,
-            open_logs
+            open_logs,
+            baixar_atualizacao,
+            verificar_atualizacao
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -189,7 +191,10 @@ fn main() {
             tauri::async_runtime::spawn(gsi::run_server(handle.clone(), gsi_port));
 
             // WebSocket manager (fica dormindo até existir sessão).
-            ws::spawn(handle.clone(), ws_rx, session_rx);
+            ws::spawn(handle.clone(), ws_rx, session_rx, update_rx);
+
+            // Checagem de versão: no boot e a cada 2h.
+            update::spawn(handle.clone());
 
             // Sessão + visibilidade da janela:
             // - sem login → mostra a janela (primeira execução);

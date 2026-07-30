@@ -13,6 +13,25 @@
         <div class="status-dot" id="statusDot" title="Desconectado"></div>
       </header>
 
+      <!-- Atualização obrigatória: cobre as outras telas enquanto pendente -->
+      <section id="updateView" class="view hidden">
+        <div class="update-box">
+          <div class="update-icone" aria-hidden="true">⬆</div>
+          <h2>Atualização necessária</h2>
+          <p class="hint">
+            Saiu a versão <strong id="updateLatest">nova</strong> do Resenha Client.
+            Enquanto você não atualizar, suas partidas <strong>não são registradas</strong>.
+          </p>
+          <button type="button" id="updateBtn">Baixar atualização</button>
+          <p class="hint small" id="updateDica">
+            O download abre no navegador. Instale por cima (não precisa desinstalar
+            nem parear de novo) e abra o Resenha Client.
+          </p>
+          <div id="updateError" class="error hidden"></div>
+          <button type="button" id="updateRecheckBtn" class="secondary">Já atualizei — verificar</button>
+        </div>
+      </section>
+
       <!-- Tela de login (primeira execução) -->
       <section id="loginView" class="view hidden">
         <p class="hint">
@@ -27,13 +46,6 @@
           <div id="loginError" class="error hidden"></div>
           <button type="submit" id="loginBtn">Conectar</button>
         </form>
-        <details class="advanced">
-          <summary>Avançado</summary>
-          <label>Servidor (backend)
-            <input type="url" id="backendUrl" placeholder="https://api.resenha.gg" />
-          </label>
-          <button type="button" id="saveBackendBtn" class="secondary">Salvar servidor</button>
-        </details>
       </section>
 
       <!-- Tela de status (uso normal) -->

@@ -1,7 +1,7 @@
 {
   "name": "resenha-client",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Resenha Client — integra o CS2 (GSI) com a plataforma Resenha",
   "type": "module",
   "scripts": {

@@ -186,6 +186,18 @@ async fn handle_gsi(State(app): State<AppHandle>, body: String) -> StatusCode {
         return StatusCode::UNAUTHORIZED;
     }
 
+    // Atualização obrigatória pendente → client bloqueado: nada é processado
+    // nem sai da máquina até o usuário instalar a versão nova (ver update.rs).
+    if app
+        .state::<AppState>()
+        .update_required
+        .lock()
+        .unwrap()
+        .is_some()
+    {
+        return StatusCode::OK;
+    }
+
     // Existe partida criada pelo site? Não → ignora (Premier, Competitivo,
     // Casual, DM… nada é processado nem enviado).
     let match_id = {

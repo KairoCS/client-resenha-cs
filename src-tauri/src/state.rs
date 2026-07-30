@@ -10,9 +10,22 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use tokio::sync::{mpsc, watch};
 
+/// Atualização obrigatória pendente: versão nova + link do instalador.
+#[derive(Serialize, Clone)]
+pub struct UpdateInfo {
+    pub latest: String,
+    pub url: String,
+}
+
 pub struct AppState {
     pub config: Mutex<AppConfig>,
     pub tokens: TokenManager,
+
+    /// Some = client desatualizado e BLOQUEADO: sem WebSocket e sem coleta
+    /// até o usuário instalar a versão nova (ver update.rs).
+    pub update_required: Mutex<Option<UpdateInfo>>,
+    /// true = bloqueado. O WS manager observa pra desconectar/reconectar.
+    pub update_tx: watch::Sender<bool>,
 
     /// Match Controller: id da partida criada pelo site (None = modo de espera,
     /// todo evento GSI é descartado sem sair da máquina).
@@ -43,16 +56,15 @@ pub struct StatusPayload {
     pub gsi_path: Option<String>,
     pub gsi_listening: bool,
     pub gsi_port: u16,
-    pub backend_url: String,
     pub autostart: bool,
+    pub version: String,
+    /// Preenchido = a UI trava na tela de atualização.
+    pub update_required: Option<UpdateInfo>,
 }
 
 pub fn status_payload(app: &AppHandle) -> StatusPayload {
     let state = app.state::<AppState>();
-    let (backend_url, gsi_port) = {
-        let cfg = state.config.lock().unwrap();
-        (cfg.backend_url.clone(), cfg.gsi_port)
-    };
+    let gsi_port = state.config.lock().unwrap().gsi_port;
     let payload = StatusPayload {
         logged_in: state.tokens.is_logged_in(),
         ws_connected: state.ws_connected.load(Ordering::Relaxed),
@@ -60,8 +72,9 @@ pub fn status_payload(app: &AppHandle) -> StatusPayload {
         gsi_path: state.gsi_path.lock().unwrap().clone(),
         gsi_listening: state.gsi_listening.load(Ordering::Relaxed),
         gsi_port,
-        backend_url,
         autostart: app.autolaunch().is_enabled().unwrap_or(false),
+        version: crate::update::CURRENT.to_string(),
+        update_required: state.update_required.lock().unwrap().clone(),
     };
     payload
 }

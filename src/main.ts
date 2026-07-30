@@ -1,7 +1,11 @@
 // Resenha Client — UI mínima (login + status). Toda a lógica pesada fica no Rust.
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { getVersion } from '@tauri-apps/api/app';
+
+interface UpdateInfo {
+  latest: string;
+  url: string;
+}
 
 interface Status {
   logged_in: boolean;
@@ -10,24 +14,44 @@ interface Status {
   gsi_path: string | null;
   gsi_listening: boolean;
   gsi_port: number;
-  backend_url: string;
   autostart: boolean;
+  version: string;
+  update_required: UpdateInfo | null;
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const loginView = $('loginView');
 const statusView = $('statusView');
+const updateView = $('updateView');
 const statusDot = $('statusDot');
 const loginForm = $('loginForm') as unknown as HTMLFormElement;
 const loginError = $('loginError');
 const loginBtn = $<HTMLButtonElement>('loginBtn');
-const backendUrl = $<HTMLInputElement>('backendUrl');
 const autostart = $<HTMLInputElement>('autostart');
 
 function render(s: Status) {
-  loginView.classList.toggle('hidden', s.logged_in);
-  statusView.classList.toggle('hidden', !s.logged_in);
+  // Atualização obrigatória tem prioridade sobre tudo: enquanto pendente, o
+  // client não coleta nada, então mostrar login/status só confundiria.
+  const bloqueado = s.update_required !== null;
+  updateView.classList.toggle('hidden', !bloqueado);
+  loginView.classList.toggle('hidden', bloqueado || s.logged_in);
+  statusView.classList.toggle('hidden', bloqueado || !s.logged_in);
+
+  if (bloqueado) {
+    $('updateLatest').textContent = `v${s.update_required!.latest}`;
+    // Sem link configurado no backend o botão não tem pra onde ir — em vez de
+    // deixar a tela num beco sem saída, manda a pessoa baixar pelo site.
+    const temLink = Boolean(s.update_required!.url);
+    $<HTMLButtonElement>('updateBtn').classList.toggle('hidden', !temLink);
+    $('updateDica').textContent = temLink
+      ? 'O download abre no navegador. Instale por cima (não precisa desinstalar nem parear de novo) e abra o Resenha Client.'
+      : 'Baixe a versão nova no site da resenha (botão "Baixar Resenha Client" na página inicial) e instale por cima.';
+    statusDot.className = 'status-dot';
+    statusDot.title = 'Atualização necessária';
+    $('versionLabel').textContent = `Resenha Client v${s.version} — desatualizado`;
+    return;
+  }
 
   statusDot.classList.toggle('connected', s.ws_connected && s.active_match === null);
   statusDot.classList.toggle('in-match', s.active_match !== null);
@@ -64,7 +88,7 @@ function render(s: Status) {
   }
 
   autostart.checked = s.autostart;
-  if (!backendUrl.value) backendUrl.value = s.backend_url;
+  $('versionLabel').textContent = `Resenha Client v${s.version}`;
 }
 
 async function refresh() {
@@ -94,16 +118,6 @@ loginForm.addEventListener('submit', async (ev) => {
   }
 });
 
-$('saveBackendBtn').addEventListener('click', async () => {
-  try {
-    await invoke('set_backend_url', { url: backendUrl.value.trim() });
-    await refresh();
-  } catch (e) {
-    loginError.textContent = String(e);
-    loginError.classList.remove('hidden');
-  }
-});
-
 autostart.addEventListener('change', async () => {
   try {
     await invoke('set_autostart', { enabled: autostart.checked });
@@ -120,6 +134,30 @@ $('logoutBtn').addEventListener('click', async () => {
 
 $('logsBtn').addEventListener('click', () => invoke('open_logs'));
 
+$('updateBtn').addEventListener('click', async () => {
+  const erro = $('updateError');
+  erro.classList.add('hidden');
+  try {
+    await invoke('baixar_atualizacao');
+  } catch (e) {
+    erro.textContent = String(e);
+    erro.classList.remove('hidden');
+  }
+});
+
+$('updateRecheckBtn').addEventListener('click', async () => {
+  const btn = $<HTMLButtonElement>('updateRecheckBtn');
+  btn.disabled = true;
+  btn.textContent = 'Verificando…';
+  try {
+    await invoke('verificar_atualizacao');
+    await refresh();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Já atualizei — verificar';
+  }
+});
+
 // O Rust emite "status" sempre que algo muda (conexão, partida, login…)
 listen<Status>('status', (ev) => render(ev.payload));
 
@@ -130,5 +168,4 @@ listen('session-expired', () => {
   refresh();
 });
 
-getVersion().then((v) => ($('versionLabel').textContent = `Resenha Client v${v}`));
 refresh();

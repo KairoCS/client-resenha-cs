@@ -153,11 +153,29 @@ periódico garante consistência mesmo com quedas de conexão.
 
 ```json
 {
-  "backend_url": "http://localhost:4000",
   "gsi_port": 3210,
   "gsi_token": "<gerado automaticamente>"
 }
 ```
 
-A URL do backend também pode ser alterada na UI (Avançado → Servidor).
+O endereço do backend é **fixo no binário** (definido em `src/config.rs`): não
+fica no config.json, não aparece na interface e não vai no payload de status.
+Quem instala pelo site não configura nada. Pra desenvolver contra um backend
+local, compile apontando pra ele:
+
+```bash
+RESENHA_BACKEND_URL=http://localhost:4000 npm run tauri build
+```
+
 Logs em `%APPDATA%\ResenhaClient\logs\` (rotação diária).
+
+## Versão e atualização obrigatória
+
+O backend informa a versão atual em `GET /api/client/version`. Se este binário
+for mais antigo, o app **trava numa tela de atualização**: não conecta no
+WebSocket e descarta todo evento do CS2 até o usuário instalar a versão nova
+(o instalador é baixado do próprio site). A checagem roda no boot e a cada 2h,
+e o backend reforça no HELLO — não dá pra contornar deixando o app aberto.
+
+Pra publicar uma versão: `node release.mjs 0.3.0` (sobe a versão nos três
+manifests, builda e copia o instalador pro site).
