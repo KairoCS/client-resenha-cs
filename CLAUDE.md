@@ -61,6 +61,28 @@ src-tauri/src/
 src/             UI (main.ts, styles.css) + index.html
 ```
 
+## Princípios e padrões
+
+Clean Code, SOLID, DRY, KISS e YAGNI — **até onde pagam**.
+
+- **S**: `main.rs` só monta o app; `commands.rs` é a superfície da UI; `gsi/`
+  separa instalar o `.cfg` de receber do CS2. Nada de lógica no `main`.
+- **I**: `StatusPayload` expõe pra UI só o que ela desenha — não vaze estado
+  interno (o endereço do backend saiu daqui de propósito).
+- **DRY** vale para duplicação **real**. Atenção: a lógica de comparar versão
+  existe em Rust (`update.rs`) e em JS (`version.js` do backend) — é
+  duplicação **inevitável** entre linguagens; se mudar uma, mude a outra.
+- **YAGNI**: a escala real é uma sala de 10 jogadores. Não construa para 10 mil.
+
+**Adotados:** state compartilhado via `AppState` + `Manager` (idioma do Tauri),
+canais `watch` para acordar tarefas (sessão, atualização), backoff com teto na
+reconexão.
+
+**Rejeitado de propósito** — não reintroduza sem argumentar o ganho concreto:
+**container de injeção de dependência**. `AppState` via `Manager` é o padrão do
+Tauri; trocar por traits deixaria o código estranho para quem conhece o
+framework.
+
 ## Regras deste projeto
 
 - **O `.cfg` do GSI é fixo.** Depois de instalado fica na pasta do CS2 para
