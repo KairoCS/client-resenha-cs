@@ -138,7 +138,7 @@ Responder `401` no upgrade quando o token estiver expirado (o client renova e re
 | `PLAYER_KILL` / `PLAYER_ASSIST` / `PLAYER_MVP` | `total`, `delta` |
 | `PLAYER_DEAD` | `deaths` (total) |
 | `PLAYER_ALIVE` | — |
-| `WEAPON_CHANGE` | `weapon` |
+| `WEAPON_CHANGE` | `weapon` — **só `weapon_c4`**: é o que atribui o plant, e nenhuma outra arma é lida |
 | `PLAYER_TEAM` | `team` (troca de lado) |
 | `GAME_OVER` | `score_ct`, `score_t` |
 | `STATE_SYNC` | estado condensado a cada 10s (mapa, placar, stats do jogador) — deixa o backend se recuperar de eventos perdidos |
@@ -146,6 +146,19 @@ Responder `401` no upgrade quando o token estiver expirado (o client renova e re
 Cada jogador envia apenas os **próprios** eventos (GSI de quem joga não expõe
 `allplayers`); o backend agrega os 10 clients da partida. O `STATE_SYNC`
 periódico garante consistência mesmo com quedas de conexão.
+
+**Não existe evento de dano.** O CS2 não expõe dano por round: capturamos 27
+payloads de uma partida competitiva ao vivo e o `player.state` traz `health`,
+`armor`, `helmet`, `flashed`, `smoked`, `burning`, `money`, `round_kills`,
+`round_killhs` e `equip_value` — o `round_totaldmg` é do CS:GO. Há teste
+travando isso (`nenhum_evento_de_dano_e_emitido`), para ninguém reintroduzir
+um ADR fantasma no cálculo do elo.
+
+**O backend descarta parte do que chega.** `MAP_CHANGE`, `MAP_PHASE`,
+`SCORE_UPDATE`, `PLAYER_ALIVE`, `PLAYER_TEAM` e `BOMB_EXPLODED` são aceitos e
+não gravados — tudo que eles diriam já está no `STATE_SYNC`. Não é erro, e não
+vira log. Se algum dia forem necessários, basta o backend voltar a gravá-los,
+sem precisar de versão nova do client.
 
 ## Configuração local
 

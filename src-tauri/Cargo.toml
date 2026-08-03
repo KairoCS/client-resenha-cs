@@ -1,6 +1,6 @@
 [package]
 name = "resenha-client"
-version = "0.2.0"
+version = "0.3.0"
 description = "Resenha Client — integra o CS2 (GSI) com a plataforma Resenha"
 edition = "2021"
 

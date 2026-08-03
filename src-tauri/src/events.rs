@@ -27,6 +27,16 @@ fn scores(v: &Value) -> (Option<i64>, Option<i64>) {
     (i(v, "/map/team_ct/score"), i(v, "/map/team_t/score"))
 }
 
+/// O bloco "player" é do dono desta máquina? Quando a pessoa morre e passa a
+/// observar um colega, o GSI troca o bloco pelo jogador OBSERVADO — e aquelas
+/// stats não são dela.
+fn is_own(v: &Value) -> bool {
+    match (s(v, "/provider/steamid"), s(v, "/player/steamid")) {
+        (Some(owner), Some(pid)) => owner == pid,
+        _ => false,
+    }
+}
+
 /// Arma com state == "active" no bloco player.weapons.
 fn active_weapon(v: &Value) -> Option<String> {
     let weapons = v.pointer("/player/weapons")?.as_object()?;
@@ -150,9 +160,14 @@ pub fn extract(prev: Option<&Value>, curr: &Value) -> Vec<GameEvent> {
                 _ => {}
             }
 
-            // Troca de arma ativa.
+            // Troca de arma ativa: só a C4 sai daqui. É ela que atribui o
+            // plant (o GSI não diz quem plantou), e o backend não usa nenhuma
+            // outra. Mandar toda troca fazia disso 62% da tabela de eventos,
+            // com 96% de faca, rifle e pistola que ninguém lê.
             let weapon = active_weapon(curr);
-            if weapon.is_some() && weapon != prev_own.and_then(active_weapon) {
+            if weapon.as_deref() == Some("weapon_c4")
+                && weapon != prev_own.and_then(active_weapon)
+            {
                 out.push(ev("WEAPON_CHANGE", json!({ "weapon": weapon })));
             }
 
@@ -172,9 +187,7 @@ pub fn extract(prev: Option<&Value>, curr: &Value) -> Vec<GameEvent> {
 pub fn condensed(v: &Value) -> Value {
     // Mesma regra dos eventos: se o bloco "player" é um colega observado
     // (jogador morto espectando), os stats dele NÃO são deste client.
-    let owner = s(v, "/provider/steamid");
-    let is_own = owner.is_some() && owner == s(v, "/player/steamid");
-    let player = if is_own {
+    let player = if is_own(v) {
         json!({
             "steamid": s(v, "/player/steamid"),
             "name": s(v, "/player/name"),
@@ -201,4 +214,114 @@ pub fn condensed(v: &Value) -> Value {
         "score_t": i(v, "/map/team_t/score"),
         "player": player,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Payload do GSI com o round terminando. `observado` simula a pessoa
+    /// morta assistindo um colega: o bloco player vira o do OUTRO jogador.
+    fn payload_fim_de_round(observado: bool) -> Value {
+        json!({
+            "provider": { "steamid": "76561198000000001" },
+            "map": { "name": "de_mirage", "phase": "live", "round": 7,
+                     "team_ct": { "score": 5 }, "team_t": { "score": 3 } },
+            "round": { "phase": "over", "win_team": "CT" },
+            "player": {
+                "steamid": if observado { "76561198000000002" } else { "76561198000000001" },
+                "state": { "health": 0 },
+                "match_stats": { "kills": 9, "assists": 2, "deaths": 6, "mvps": 1 }
+            }
+        })
+    }
+
+    fn achar<'a>(eventos: &'a [GameEvent], kind: &str) -> Option<&'a GameEvent> {
+        eventos.iter().find(|e| e.kind == kind)
+    }
+
+    #[test]
+    fn fim_de_round_gera_round_end_com_vencedor() {
+        let anterior = json!({ "round": { "phase": "live" } });
+        let eventos = extract(Some(&anterior), &payload_fim_de_round(false));
+
+        let fim = achar(&eventos, "ROUND_END").expect("ROUND_END não foi emitido");
+        assert_eq!(fim.data["winner"], "CT");
+        assert_eq!(fim.data["round"], 7);
+    }
+
+    /// O CS2 não expõe dano por round. Capturamos 27 payloads de uma partida
+    /// competitiva ao vivo (provider 14173) e o `player.state` traz apenas
+    /// health, armor, helmet, flashed, smoked, burning, money, round_kills,
+    /// round_killhs e equip_value. O `round_totaldmg` é do CS:GO.
+    ///
+    /// Este teste existe para travar a regressão: se alguém reintroduzir um
+    /// evento de dano, ele quebra aqui em vez de virar ADR fantasma no elo.
+    #[test]
+    fn nenhum_evento_de_dano_e_emitido() {
+        let anterior = json!({
+            "provider": { "steamid": "76561198000000001" },
+            "map": { "phase": "live", "round": 3 },
+            "round": { "phase": "live" },
+            "player": { "steamid": "76561198000000001", "state": { "health": 100 },
+                        "match_stats": { "kills": 1, "assists": 0, "deaths": 0, "mvps": 0 } }
+        });
+        let morreu = json!({
+            "provider": { "steamid": "76561198000000001" },
+            "map": { "phase": "live", "round": 3 },
+            "round": { "phase": "live" },
+            "player": { "steamid": "76561198000000001", "state": { "health": 0 },
+                        "match_stats": { "kills": 1, "assists": 0, "deaths": 1, "mvps": 0 } }
+        });
+
+        let eventos = extract(Some(&anterior), &morreu);
+        assert!(achar(&eventos, "PLAYER_DEAD").is_some(), "a morte tem que ser detectada");
+        assert!(
+            achar(&eventos, "ROUND_DAMAGE").is_none(),
+            "o CS2 não fornece dano — nenhum evento de dano pode ser inventado"
+        );
+        let sync = condensed(&morreu);
+        assert!(
+            sync["player"]["round_totaldmg"].is_null(),
+            "campo de dano não existe no GSI do CS2 e não pode entrar no STATE_SYNC"
+        );
+    }
+
+    /// Trocar de arma acontece o tempo todo e ninguém lê isso — só a C4
+    /// importa, porque é o que atribui o plant.
+    #[test]
+    fn so_a_c4_gera_weapon_change() {
+        let com_arma = |nome: &str| {
+            json!({
+                "provider": { "steamid": "76561198000000001" },
+                "map": { "phase": "live", "round": 3 },
+                "round": { "phase": "live" },
+                "player": {
+                    "steamid": "76561198000000001",
+                    "state": { "health": 100 },
+                    "match_stats": { "kills": 0, "assists": 0, "deaths": 0, "mvps": 0 },
+                    "weapons": { "weapon_0": { "name": nome, "state": "active" } }
+                }
+            })
+        };
+
+        let rifle = extract(Some(&com_arma("weapon_knife")), &com_arma("weapon_ak47"));
+        assert!(
+            achar(&rifle, "WEAPON_CHANGE").is_none(),
+            "troca para rifle não deve sair da máquina do jogador"
+        );
+
+        let c4 = extract(Some(&com_arma("weapon_ak47")), &com_arma("weapon_c4"));
+        let ev = achar(&c4, "WEAPON_CHANGE").expect("a C4 precisa sair: é ela que atribui o plant");
+        assert_eq!(ev.data["weapon"], "weapon_c4");
+    }
+
+    #[test]
+    fn condensed_so_leva_stats_do_proprio_jogador() {
+        let proprio = condensed(&payload_fim_de_round(false));
+        assert_eq!(proprio["player"]["kills"], 9);
+
+        let observando = condensed(&payload_fim_de_round(true));
+        assert!(observando["player"].is_null());
+    }
 }
