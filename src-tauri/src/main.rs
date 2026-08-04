@@ -169,9 +169,15 @@ fn main() {
             open_logs
         ])
         .setup(move |app| {
-            let handle = app.handle().clone();
+    let handle = app.handle().clone();
 
-            tray::setup(&handle)?;
+    tray::setup(&handle)?;
+
+    if let Some(window) = handle.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+
 
             // GSI: garante o .cfg fixo na pasta do CS2 e sobe o servidor local.
             let (gsi_token, gsi_port) = {
