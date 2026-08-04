@@ -16,9 +16,9 @@
         "title": "Resenha Client",
         "width": 400,
         "height": 560,
+        "decorations": false,
         "resizable": false,
         "maximizable": false,
-        "center": true,
         "visible": true,
         "skipTaskbar": false
       }

@@ -173,10 +173,11 @@ fn main() {
 
     tray::setup(&handle)?;
 
-    if let Some(window) = handle.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+if let Some(window) = app.get_webview_window("main") {
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
 
 
             // GSI: garante o .cfg fixo na pasta do CS2 e sobe o servidor local.

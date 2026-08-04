@@ -5,9 +5,27 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use tracing::warn;
+use tauri::{PhysicalPosition, Position as TauriPosition};
+use tauri_plugin_positioner::{Position as WindowPosition, WindowExt};
 
 pub fn show_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+
+        // Vai para o canto superior direito
+        let _ = window.move_window(WindowPosition::BottomRight);
+
+        // Aplica uma margem
+        if let Ok(pos) = window.outer_position() {
+            let _ = window.set_position(
+                TauriPosition::Physical(
+                    PhysicalPosition::new(
+                        pos.x - 20, 
+                        pos.y - 60, 
+                    ),
+                ),
+            );
+        }
+
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
