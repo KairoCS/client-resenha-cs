@@ -73,21 +73,26 @@ fn main() {
             commands::verificar_atualizacao
         ])
         .setup(move |app| {
-            let handle = app.handle().clone();
+    let handle = app.handle().clone();
 
-            tray::setup(&handle)?;
-            iniciar_gsi(&handle);
+    tray::setup(&handle)?;
 
-            // WebSocket manager (fica dormindo até existir sessão) e checagem
-            // de versão (no boot e a cada 2h).
-            ws::spawn(handle.clone(), ws_rx, session_rx, update_rx);
-            update::spawn(handle.clone());
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
 
-            restaurar_sessao(handle.clone());
+    iniciar_gsi(&handle);
 
-            info!("Resenha Client v{} iniciado", update::CURRENT);
-            Ok(())
-        })
+    ws::spawn(handle.clone(), ws_rx, session_rx, update_rx);
+    update::spawn(handle.clone());
+
+    restaurar_sessao(handle.clone());
+
+    info!("Resenha Client v{} iniciado", update::CURRENT);
+    Ok(())
+})
         // Fechar a janela = esconder pra bandeja (o app continua rodando).
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
