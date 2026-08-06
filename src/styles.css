@@ -26,7 +26,6 @@ html, body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 16px;
   gap: 14px;
 }
 
@@ -34,7 +33,11 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
 }
+
+
 
 .logo {
   font-weight: 800;
@@ -47,18 +50,7 @@ html, body {
   font-weight: 400;
 }
 
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--danger);
-  box-shadow: 0 0 6px var(--danger);
-  transition: background 0.3s, box-shadow 0.3s;
-}
-.status-dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.status-dot.in-match { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
-
-.view { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+.view { display: flex; flex-direction: column; padding: 16px; gap: 12px; flex: 1; }
 .hidden { display: none !important; }
 
 .hint { color: var(--muted); line-height: 1.4; }
