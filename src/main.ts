@@ -1,6 +1,8 @@
 // Resenha Client — UI mínima (login + status). Toda a lógica pesada fica no Rust.
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import '@fontsource/playfair-display/400-italic.css';
 
 interface UpdateInfo {
   latest: string;
@@ -29,6 +31,13 @@ const loginForm = $('loginForm') as unknown as HTMLFormElement;
 const loginError = $('loginError');
 const loginBtn = $<HTMLButtonElement>('loginBtn');
 const autostart = $<HTMLInputElement>('autostart');
+const settingsPanel = $('settingsPanel');
+const settingsBtn = $<HTMLButtonElement>('settingsBtn');
+
+function setSettingsOpen(open: boolean) {
+  settingsPanel.classList.toggle('hidden', !open);
+  settingsBtn.setAttribute('aria-expanded', String(open));
+}
 
 function render(s: Status) {
   // Atualização obrigatória tem prioridade sobre tudo: enquanto pendente, o
@@ -47,7 +56,7 @@ function render(s: Status) {
     $('updateDica').textContent = temLink
       ? 'O download abre no navegador. Instale por cima (não precisa desinstalar nem parear de novo) e abra o Resenha Client.'
       : 'Baixe a versão nova no site da resenha (botão "Baixar Resenha Client" na página inicial) e instale por cima.';
-    statusDot.className = 'status-dot';
+    statusDot.className = 'brand-mark';
     statusDot.title = 'Atualização necessária';
     $('versionLabel').textContent = `Resenha Client v${s.version} — desatualizado`;
     return;
@@ -55,19 +64,23 @@ function render(s: Status) {
 
   statusDot.classList.toggle('connected', s.ws_connected && s.active_match === null);
   statusDot.classList.toggle('in-match', s.active_match !== null);
+  const temErroDeLogin = !loginError.classList.contains('hidden');
+  statusDot.classList.toggle('offline', (s.logged_in && !s.ws_connected) || temErroDeLogin);
+  statusView.classList.toggle('is-connected', s.ws_connected && s.active_match === null);
+  statusView.classList.toggle('is-match', s.active_match !== null);
   statusDot.title = s.ws_connected ? 'Conectado' : 'Desconectado';
 
   const conn = $('connLabel');
-  conn.textContent = s.ws_connected ? 'conectado ao servidor' : 'reconectando…';
-  conn.className = s.ws_connected ? 'value ok' : 'value bad';
+  conn.textContent = s.ws_connected ? 'Cliente conectado' : 'Tentando reconectar…';
+  conn.className = s.ws_connected ? 'connection-title ok' : 'connection-title bad';
 
   const match = $('matchLabel');
   if (s.active_match !== null) {
-    match.textContent = `partida #${s.active_match} em andamento`;
-    match.className = 'value warn';
+    match.textContent = `Partida #${s.active_match} em andamento`;
+    match.className = 'match-title warn';
   } else {
-    match.textContent = 'nenhuma partida ativa';
-    match.className = 'value';
+    match.textContent = 'Aguardando sua próxima partida';
+    match.className = 'match-title';
   }
 
   const gsi = $('gsiLabel');
@@ -102,19 +115,30 @@ async function refresh() {
 loginForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   loginError.classList.add('hidden');
+  statusDot.classList.remove('offline');
+  const codeInput = $<HTMLInputElement>('pairCode');
+  const code = codeInput.value.trim().toUpperCase();
+  if (!code) {
+    loginError.textContent = 'Digite o código de conexão para continuar.';
+    loginError.classList.remove('hidden');
+    statusDot.classList.add('offline');
+    codeInput.focus();
+    codeInput.closest('.code-field')?.classList.add('invalid');
+    return;
+  }
   loginBtn.disabled = true;
-  loginBtn.textContent = 'Conectando…';
+  loginBtn.querySelector('span')!.textContent = 'Conectando…';
   try {
-    const codeInput = $<HTMLInputElement>('pairCode');
-    await invoke('login', { code: codeInput.value.trim().toUpperCase() });
+    await invoke('login', { code });
     codeInput.value = '';
     await refresh();
   } catch (e) {
     loginError.textContent = String(e);
     loginError.classList.remove('hidden');
+    statusDot.classList.add('offline');
   } finally {
     loginBtn.disabled = false;
-    loginBtn.textContent = 'Conectar';
+    loginBtn.querySelector('span')!.textContent = 'Conectar';
   }
 });
 
@@ -128,11 +152,28 @@ autostart.addEventListener('change', async () => {
 });
 
 $('logoutBtn').addEventListener('click', async () => {
+  setSettingsOpen(false);
   await invoke('logout');
   await refresh();
 });
 
 $('logsBtn').addEventListener('click', () => invoke('open_logs'));
+
+settingsBtn.addEventListener('click', () => {
+  setSettingsOpen(settingsPanel.classList.contains('hidden'));
+});
+
+$<HTMLInputElement>('pairCode').addEventListener('input', (ev) => {
+  const input = ev.currentTarget as HTMLInputElement;
+  input.closest('.code-field')?.classList.remove('invalid');
+  loginError.classList.add('hidden');
+  statusDot.classList.remove('offline');
+});
+
+$('settingsCloseBtn').addEventListener('click', () => setSettingsOpen(false));
+
+$('minimizeBtn').addEventListener('click', () => getCurrentWindow().minimize());
+$('closeWindowBtn').addEventListener('click', () => getCurrentWindow().close());
 
 $('updateBtn').addEventListener('click', async () => {
   const erro = $('updateError');
@@ -165,6 +206,7 @@ listen<Status>('status', (ev) => render(ev.payload));
 listen('session-expired', () => {
   loginError.textContent = 'Sua sessão expirou. Entre novamente.';
   loginError.classList.remove('hidden');
+  statusDot.classList.add('offline');
   refresh();
 });
 

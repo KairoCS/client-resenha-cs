@@ -1,87 +1,56 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Resenha Client</title>
-    <link rel="stylesheet" href="/src/styles.css" />
-  </head>
-  <body>
-    <div id="app">
-      <header class="header">
-        <div class="logo">RESENHA<span>CLIENT</span></div>
-        <div class="status-dot" id="statusDot" title="Desconectado"></div>
-      </header>
-
-      <!-- Atualização obrigatória: cobre as outras telas enquanto pendente -->
-      <section id="updateView" class="view hidden">
-        <div class="update-box">
-          <div class="update-icone" aria-hidden="true">⬆</div>
-          <h2>Atualização necessária</h2>
-          <p class="hint">
-            Saiu a versão <strong id="updateLatest">nova</strong> do Resenha Client.
-            Enquanto você não atualizar, suas partidas <strong>não são registradas</strong>.
-          </p>
-          <button type="button" id="updateBtn">Baixar atualização</button>
-          <p class="hint small" id="updateDica">
-            O download abre no navegador. Instale por cima (não precisa desinstalar
-            nem parear de novo) e abra o Resenha Client.
-          </p>
-          <div id="updateError" class="error hidden"></div>
-          <button type="button" id="updateRecheckBtn" class="secondary">Já atualizei — verificar</button>
-        </div>
-      </section>
-
-      <!-- Tela de login (primeira execução) -->
-      <section id="loginView" class="view hidden">
-        <form id="loginForm">
-          <label>Código de conexão
-            <input type="text" id="pairCode" required autocomplete="off" spellcheck="false"
-                   placeholder="EX: 7K2M9Q" maxlength="12" class="code-input" />
-          </label>
-          <div id="loginError" class="error hidden"></div>
-          <button type="submit" id="loginBtn">Conectar</button>
-        </form>
-      </section>
-
-      <!-- Tela de status (uso normal) -->
-      <section id="statusView" class="view hidden">
-        <div class="card">
-          <div class="row">
-            <span class="label">Conexão</span>
-            <span id="connLabel" class="value">—</span>
-          </div>
-          <div class="row">
-            <span class="label">Partida</span>
-            <span id="matchLabel" class="value">nenhuma partida ativa</span>
-          </div>
-          <div class="row">
-            <span class="label">GSI (CS2)</span>
-            <span id="gsiLabel" class="value">—</span>
-          </div>
-        </div>
-
-        <label class="toggle">
-          <input type="checkbox" id="autostart" />
-          <span>Executar ao iniciar o Windows</span>
-        </label>
-
-        <p class="hint small">
-          O Resenha Client fica na bandeja do sistema e só processa eventos do CS2
-          quando existe uma partida criada pelo site. Partidas Premier, Competitivo,
-          Casual ou Deathmatch são ignoradas.
-        </p>
-
-        <div class="actions">
-          <button type="button" id="logsBtn" class="secondary">Abrir logs</button>
-          <button type="button" id="logoutBtn" class="danger">Sair da conta</button>
-        </div>
-      </section>
-
-      <footer class="footer">
-        <span id="versionLabel"></span>
-      </footer>
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Resenha Client</title><link rel="stylesheet" href="/src/styles.css">
+</head>
+<body><main id="app">
+  <header class="titlebar" data-tauri-drag-region>
+    <div class="brand-mark" id="statusDot" title="Desconectado" aria-label="Status do cliente"></div>
+    <div class="window-controls">
+      <button type="button" id="minimizeBtn" class="window-button" aria-label="Minimizar" title="Minimizar"><span></span></button>
+      <button type="button" id="closeWindowBtn" class="window-button close-window" aria-label="Fechar" title="Fechar"><span></span></button>
     </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
-</html>
+  </header>
+
+  <section id="updateView" class="view update-view hidden">
+    <div class="update-icon" aria-hidden="true">↑</div>
+    <div><p class="eyebrow">NOVA VERSÃO</p><h1>Atualização necessária</h1></div>
+    <p class="support-copy">A versão <strong id="updateLatest">nova</strong> está disponível. Atualize para continuar registrando suas partidas.</p>
+    <button type="button" id="updateBtn" class="primary">Baixar atualização</button>
+    <p class="microcopy" id="updateDica"></p><div id="updateError" class="error hidden"></div>
+    <button type="button" id="updateRecheckBtn" class="text-button">Já atualizei — verificar</button>
+  </section>
+
+  <section id="loginView" class="view login-view hidden">
+    <div class="login-heading"><p class="eyebrow">CONECTAR AO RESENHA</p><h1>Digite seu código</h1></div>
+    <form id="loginForm" novalidate>
+      <label class="sr-only" for="pairCode">Código de conexão</label>
+      <div class="code-field">
+        <input type="text" id="pairCode" required autocomplete="off" spellcheck="false" aria-describedby="loginHelp" placeholder="• • • • • •" maxlength="12" class="code-input">
+        <button type="submit" id="loginBtn" class="connect-button" aria-label="Conectar"><span>Conectar</span><b aria-hidden="true">→</b></button>
+      </div>
+      <div id="loginError" class="error login-error hidden" role="alert" aria-live="polite"></div>
+    </form>
+    <p id="loginHelp" class="microcopy">Gere o código no seu perfil do Resenha.</p>
+    <a class="help-link" href="https://resenha.gg" target="_blank" rel="noreferrer">Preciso de ajuda</a>
+  </section>
+
+  <section id="statusView" class="view status-view hidden">
+    <div class="status-summary">
+      <div class="summary-topline"><span class="live-dot" aria-hidden="true"></span><p id="connLabel" class="connection-title">—</p></div>
+      <p id="matchLabel" class="match-title">nenhuma partida ativa</p><div class="divider"></div>
+      <div class="gsi-status"><span>CS2</span><span id="gsiLabel" class="value">—</span></div>
+    </div>
+    <button type="button" id="settingsBtn" class="settings-button" aria-expanded="false" aria-controls="settingsPanel" title="Configurações">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Zm8.1 4.7-1.8 1.1c-.2.6-.4 1.1-.7 1.6l.5 2-2 2-2-.5c-.5.3-1 .5-1.6.7l-1.1 1.8H8.6l-1.1-1.8c-.6-.2-1.1-.4-1.6-.7l-2 .5-2-2 .5-2c-.3-.5-.5-1-.7-1.6L0 12.6V9.8l1.8-1.1c.2-.6.4-1.1.7-1.6l-.5-2 2-2 2 .5c.5-.3 1-.5 1.6-.7L8.6 1h2.8l1.1 1.8c.6.2 1.1.4 1.6.7l2-.5 2 2-.5 2c.3.5.5 1 .7 1.6l1.8 1.1v2.8Z"/></svg>
+    </button>
+    <aside id="settingsPanel" class="settings-panel hidden" aria-label="Configurações">
+      <div class="settings-heading"><div><p class="eyebrow">CLIENTE</p><h2>Configurações</h2></div><button type="button" id="settingsCloseBtn" class="close-button" aria-label="Fechar configurações">×</button></div>
+      <label class="toggle"><span><strong>Iniciar com o Windows</strong><small>Abrir silenciosamente na bandeja</small></span><input type="checkbox" id="autostart"><i aria-hidden="true"></i></label>
+      <p class="privacy-copy">O client só processa dados do CS2 durante partidas criadas no Resenha.</p>
+      <div class="settings-actions"><button type="button" id="logsBtn" class="secondary">Abrir logs</button><button type="button" id="logoutBtn" class="danger">Desconectar conta</button></div>
+    </aside>
+  </section>
+  <footer class="footer"><span id="versionLabel"></span></footer>
+</main><script type="module" src="/src/main.ts"></script></body></html>
